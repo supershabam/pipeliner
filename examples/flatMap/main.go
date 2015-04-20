@@ -61,14 +61,14 @@ func filenameToPeople(ctx pipeliner.Context, file string) <-chan Person {
 
 //go:generate pipeliner -file=filenames_to_people.go -from=string -func=filenamesToPeople -into=Person -operator=flatMap
 func main() {
-	ctx := pipeliner.FirstError()
+	ctx := pipeliner.QueueError()
 	filesCh := files(ctx, 200)
 	peopleCh := filenamesToPeople(ctx, 10, filesCh, filenameToPeople)
 	for person := range peopleCh {
 		fmt.Printf("%+v\n", person)
 	}
-	if err := ctx.Err(); err != nil {
-		log.Fatal(err)
+	if len(ctx.Errors()) != 0 {
+		log.Fatal(ctx.Errors()[0])
 	}
 	log.Println("done")
 }
