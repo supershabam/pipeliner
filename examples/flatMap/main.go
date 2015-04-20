@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/supershabam/pipeliner"
 )
 
 type Person struct {
 	Name string
 }
 
-func files(done <-chan struct{}, num int) <-chan string {
+func files(ctx pipeliner.Context, num int) <-chan string {
+	done := ctx.Done()
 	out := make(chan string)
 	go func() {
 		defer close(out)
@@ -26,21 +29,18 @@ func files(done <-chan struct{}, num int) <-chan string {
 	return out
 }
 
-func filenameToPeople(done <-chan struct{}, file string) (<-chan Person, <-chan error) {
+func filenameToPeople(ctx pipeliner.Context, file string) <-chan Person {
+	done := ctx.Done()
 	out := make(chan Person)
-	errc := make(chan error, 1)
 	go func() {
 		defer close(out)
-		var err error
-		defer func() {
-			errc <- err
-		}()
 
 		// read json file of people, filter them
 		// we'll fake that process
 		for i := 0; i < 200; i++ {
 			if i == 75 {
-				err = fmt.Errorf("oops")
+				err := fmt.Errorf("oops")
+				ctx.Cancel(err)
 				return
 			}
 			// can choose to filter out people here
@@ -56,19 +56,19 @@ func filenameToPeople(done <-chan struct{}, file string) (<-chan Person, <-chan 
 			}
 		}
 	}()
-	return out, errc
+	return out
 }
 
 //go:generate pipeliner -file=filenames_to_people.go -from=string -func=filenamesToPeople -into=Person -operator=flatMap
 func main() {
-	done := make(chan struct{})
-	filesc := files(done, 200)
-	people, peopleErrc := filenamesToPeople(done, 10, filesc, filenameToPeople)
-	for person := range people {
+	ctx := pipeliner.QueueError()
+	filesCh := files(ctx, 200)
+	peopleCh := filenamesToPeople(ctx, 10, filesCh, filenameToPeople)
+	for person := range peopleCh {
 		fmt.Printf("%+v\n", person)
 	}
-	if err := <-peopleErrc; err != nil {
-		log.Fatal(err)
+	if len(ctx.Errors()) != 0 {
+		log.Fatal(ctx.Errors()[0])
 	}
 	log.Println("done")
 }

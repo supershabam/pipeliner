@@ -30,7 +30,8 @@ const batch = `// AUTOMATICALLY GENERATED FILE - DO NOT EDIT
 package {{.Package}}
 
 // {{.Fn}} is a generated implementation of the batch operator
-func {{.Fn}}(done <-chan struct{}, max int, in <-chan {{.From}}) <-chan []{{.From}} {
+func {{.Fn}}(ctx pipeliner.Context, max int, in <-chan {{.From}}) <-chan []{{.From}} {
+	done := ctx.Done()
 	if max <= 0 {
 		panic("batch max must be greater than zero")
 	}
@@ -70,65 +71,30 @@ const flatMap = `// AUTOMATICALLY GENERATED FILE - DO NOT EDIT
 package {{.Package}}
 
 // {{.Fn}} is a generated implementation of the flatMap operator
-func {{.Fn}}(outerDone <-chan struct{}, concurrency int, in <-chan {{.From}}, fn func(<-chan struct{}, {{.From}}) (<-chan {{.Into}}, <-chan error)) (<-chan {{.Into}}, <-chan error) {
+func {{.Fn}}(ctx pipeliner.Context, concurrency int, in <-chan {{.From}}, fn func(pipeliner.Context, {{.From}}) <-chan {{.Into}}) <-chan {{.Into}} {
+	done := ctx.Done()
 	out := make(chan {{.Into}})
-	errc := make(chan error, 1)
 	go func() {
 		defer close(out)
-		var outerErr error
-		defer func() {
-			errc <- outerErr
-		}()
-		// create our own done function that we have the ability to
-		// close upon error. Wrap a once function around closing
-		// the done function to protect ourselves.
-		done := make(chan struct{})
-		once := sync.Once{}
-		stop := func(err error) {
-			once.Do(func() {
-				if err != nil {
-					outerErr = err
-				}
-				close(done)
-			})
-		}
-		// outerDone signals stop
-		go func() {
-			select {
-			case <-outerDone:
-				stop(nil)
-			case <-done:
-			}
-		}()
-		// stop must be called at least once to ensure the
-		// goroutine exits.
-		defer stop(nil) 
-
 		wg := sync.WaitGroup{}
 		wg.Add(concurrency)
 		for i := 0; i < concurrency; i++ {
 			go func() {
 				defer wg.Done()
 				for v := range in {
-					vch, verrc := fn(done, v)
-					for w := range vch {
+					for w := range fn(ctx, v) {
 						select {
 						case <-done:
 							return
 						case out <- w:
 						}
 					}
-					err := <-verrc
-					if err != nil {
-						stop(err)
-						return
-					}
 				}
 			}()
 		}
 		wg.Wait()
 	}()
-	return out, errc
+	return out
 }
 `
 
