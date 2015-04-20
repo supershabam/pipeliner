@@ -1,8 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
 
-func source(done <-chan struct{}, start, end int) <-chan int {
+	"github.com/supershabam/pipeliner"
+)
+
+func source(ctx pipeliner.Context, start, end int) <-chan int {
+	done := ctx.Done()
 	out := make(chan int)
 	go func() {
 		defer close(out)
@@ -19,9 +24,9 @@ func source(done <-chan struct{}, start, end int) <-chan int {
 
 //go:generate pipeliner -file=batch_ints.go -from=int -func=batchInts -operator=batch
 func main() {
-	done := make(chan struct{})
-	sourcec := source(done, 0, 9000)
-	batches := batchInts(done, 320, sourcec)
+	ctx := pipeliner.FirstError()
+	sourceCh := source(ctx, 0, 9000)
+	batches := batchInts(ctx, 320, sourceCh)
 	for batch := range batches {
 		fmt.Printf("received batch of length: %d\n", len(batch))
 	}
