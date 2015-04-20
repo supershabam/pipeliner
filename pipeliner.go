@@ -143,12 +143,15 @@ func write(config pipelineConfig, source, file string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	tmpl, err := template.New("pipeliner").Parse(source)
 	if err != nil {
 		return err
 	}
 	err = tmpl.Execute(out, config)
+	if err != nil {
+		return err
+	}
+	err = out.Close()
 	if err != nil {
 		return err
 	}
