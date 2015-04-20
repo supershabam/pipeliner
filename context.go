@@ -12,10 +12,6 @@ type Context interface {
 	// Done is used by pipelines to determine when to stop
 	// processing.
 	Done() <-chan struct{}
-	// Err should be called once the pipeline finishes
-	// draining values to see if the pipeline completed
-	// with or without an error.
-	Err() error
 }
 
 type firstError struct {
