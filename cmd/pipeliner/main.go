@@ -151,7 +151,7 @@ func main() {
 	// TODO: validate inputs
 	config := pipelineConfig{
 		Package: os.Getenv("GOPACKAGE"),
-		Version: "0.1.0",
+		Version: "0.1.1",
 		Fn:      *fn,
 		From:    *from,
 		Into:    *into,
